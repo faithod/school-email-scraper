@@ -553,7 +553,8 @@ const csvWriter = createCsvWriter({
     let browser;
     // const browser = await launch({ headless: true });
 
-    const csvRows = []
+
+    const csvRows = [];
     let emailsFound = 0;
 
 
@@ -570,52 +571,72 @@ const csvWriter = createCsvWriter({
                Premises: premises@oaklandsschool.com` // >> premises@oaklandsschool.com was matched for pastoral
                // suggestion: if theres an email after the match -> forget everything after it...
 
-    for (const school of schools) {
-        let result = blankResult;
+    const pLimit = await import('p-limit').then(mod => mod.default);
+    const CHUNK_SIZE = 300;
+    const limit = pLimit(5);
 
-        try {
-            result = await scrapeSchool(school, browser);
-        } catch (error) {
-            console.warn(`failed to scrape school: ${school.name} - ${error?.message}`);
-        }
+    // Helper to chunk array
+    const chunkArray = (array, size) =>
+        Array.from({ length: Math.ceil(array.length / size) }, (_, i) =>
+            array.slice(i * size, i * size + size)
+        );
 
-        const currentSchool = existingRows.find(row => row['School Name'] === school.name);
+    const chunks = chunkArray(schools, CHUNK_SIZE);
 
-        for (const [_, array] of Object.entries(result)) {
-            emailsFound += array.length;
-        }
+    for (const chunk of chunks) {
+        console.warn(`Processing batch of ${chunk.length} schools...`);
 
-        const row = {
-            la: currentSchool['LA (name)'],
-            schoolName: school.name,
-            street: currentSchool.Street,
-            postcode: currentSchool.Postcode,
-            website: currentSchool.Website,
-            telephone: currentSchool.TelephoneNum,
-            headTitle: currentSchool['HeadTitle (name)'],
-            headFirstName: currentSchool.HeadFirstName,
-            headLastName: currentSchool.HeadLastName,
-            gor: currentSchool['GOR (name)'],
-            district: currentSchool['DistrictAdministrative (name)'],
-            dsl: result.dsl.join(', '),
-            pshe: result.pshe.join(', '),
-            pastoral: result.pastoral.join(', '),
-            mental_health: result.mental_health.join(', '),
-            safeguarding_officer: result.safeguarding_officer.join(', '),
-            deputy_head: result.deputy_head.join(', '),
-            headteacher: result.headteacher.join(', '),
-            head_of_year: result.head_of_year.join(', '),
-            head_of_school: result.head_of_school.join(', '),
-        };
+        const promises = chunk.map(school =>
+            limit(async () => {
+                let result = blankResult;
 
-        await csvWriter.writeRecords([row]); // write one row
-        // csvRows.push(row);
+                try {
+                    result = await scrapeSchool(school, browser);
+                } catch (error) {
+                    console.warn(`Failed to scrape school ${school.name}: ${error?.message}`);
+                }
+
+                for (const arr of Object.values(result)) {
+                    emailsFound += arr.length;
+                }
+
+                const currentSchool = existingRows.find(row => row['School Name'] === school.name);
+
+                const row = {
+                    la: currentSchool['LA (name)'],
+                    schoolName: school.name,
+                    street: currentSchool.Street,
+                    postcode: currentSchool.Postcode,
+                    website: currentSchool.Website,
+                    telephone: currentSchool.TelephoneNum,
+                    headTitle: currentSchool['HeadTitle (name)'],
+                    headFirstName: currentSchool.HeadFirstName,
+                    headLastName: currentSchool.HeadLastName,
+                    gor: currentSchool['GOR (name)'],
+                    district: currentSchool['DistrictAdministrative (name)'],
+                    dsl: result.dsl.join(', '),
+                    pshe: result.pshe.join(', '),
+                    pastoral: result.pastoral.join(', '),
+                    mental_health: result.mental_health.join(', '),
+                    safeguarding_officer: result.safeguarding_officer.join(', '),
+                    deputy_head: result.deputy_head.join(', '),
+                    headteacher: result.headteacher.join(', '),
+                    head_of_year: result.head_of_year.join(', '),
+                    head_of_school: result.head_of_school.join(', '),
+                };
+
+                await csvWriter.writeRecords([row]); // write 1 row
+                // csvRows.push(row);
+            })
+        );
+
+        await Promise.all(promises);
     }
-        
     // await browser.close();
     // await csvWriter.writeRecords(csvRows);
     console.log(`CSV writing complete! -- ${emailsFound} emails found`);
 })();
+
 
 // steps:
 // parse csv
