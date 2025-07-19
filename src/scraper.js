@@ -6,7 +6,7 @@ const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const fs = require('fs');
 
 // ohh they show based on priority...
-const roleRegexMap = {
+ const roleRegexMap = {
   dsl: /designated safeguarding lead|safeguarding lead/i, // DOES ADDING JUST 'SAFEGAURDING' CHANGE THINGS??
   pshe: /pshe lead|pshe teacher|personal, social/i, // Personal, Social, Health hmmm
   pastoral: /head of pastoral care|pastoral lead|pastoral care|pastoral/i,
@@ -201,6 +201,15 @@ async function extractEmails(link, html, result) {
                 console.log("the email after:", `(${allText.slice(indexInLine, indexInLine + 60)})`);
 
 
+                // ADDD =>>>>>>>>>
+                // make sure we dont match random 'dsl' letters in words
+                // const otherRegex = /DSL/;
+                //     if (regex.test(line) || (role === "dsl" && otherRegex.test(line))) {
+                //     const regexToUse = role === "dsl" && !regex.test(line) ? otherRegex : regex
+
+
+
+
 
                         // const startIndex = context.match(regex).index; // add safety?
                         // const whereToStart = line.slice(0, startIndex).length <= 80 ? 0 : startIndex - 80;
@@ -342,110 +351,6 @@ async function extractEmails(link, html, result) {
 
   return result;
 }
-
-
-
-// async function extractByRole(link, html, result) {
-//     const $ = cheerio.load(html);
-//     const textBlocks = $('body')
-//      .text()
-//      .split('\n')
-//      .map(line => line.trim())
-//      .filter(Boolean);
-//      // dont do line by line! sometimes the info is on the next line?
-
-//      for (const line of textBlocks) {
-//         for (const [role, regex] of Object.entries(roleRegexMap)) {
-
-//             // make sure we dont match random 'dsl' letters in words
-//             const otherRegex = /DSL/;
-
-//             if (regex.test(line) || (role === "dsl" && otherRegex.test(line))) {
-
-//                 console.log("role:", role);
-
-//                 const regexToUse = role === "dsl" && !regex.test(line) ? otherRegex : regex
-
-//                 const startIndex = line.match(regexToUse).index; // add safety?
-//                 const whereToStart = line.slice(0, startIndex).length <= 80 ? 0 : startIndex - 80;
-//                 // const whereToStart = startIndex - 80 > 0 ? startIndex - 80 : startIndex - 70 > 0 ? startIndex - 70 : startIndex - 60 > 0 ? startIndex - 60 : startIndex - 50 > 0 ? startIndex - 50 : startIndex - 40 > 0 ? startIndex - 40 : startIndex;
-//                 const snippet = line.slice(whereToStart, whereToStart + 170); // alter numbers with each case...?
-
-
-//                 if (role === "deputy_head") {
-//                     if (!snippet.toLowerCase().includes("pastor") && !snippet.toLowerCase().includes("safeguarding") && !snippet.toLowerCase().includes("dsl")){
-//                         continue;
-//                     }
-//                 }
-
-                
-//                 console.log("line:", `(${line})`)
-//                 console.log("link:", `(${link})`)
-
-//                 console.log("\n")
-//                 console.log("snippet:", `(${snippet})`)
-//                 console.log("\n\n\n")
-
-
-//                 // for headteacher -- reject it if starts with assistant
-
-//                 const response = await getGPTResponse(snippet); // wait a minute before each...
-//                 let responseObj;
-//                 console.log("response:", response)
-
-//                 try {
-//                     responseObj = JSON.parse(response)
-//                 } catch {
-//                     console.log("couldn't parse:", response);
-//                 }
-
-//                 console.log("responseObj:", responseObj)
-
-//                 // works
-//                 if (!responseObj || !(responseObj.name || responseObj.role || responseObj.email)) {
-//                     console.log("rejected!!!!", responseObj)
-//                     continue;
-//                 }
-
-//                 // replace null fields...
-//                 // test to see if it works
-//                 // unit test for this...?
-//                 if (result[role]) {
-//                     console.log("what we already have:", result[role])
-//                     console.log("new:", responseObj)
-                    
-//                     let newValues = false;
-
-//                     for (const key in result[role]) {
-//                         if (!result[role][key]) {
-//                             if (responseObj[key]) { 
-//                                 result[role][key] = responseObj[key]
-//                                 newValues = true;
-//                                 console.log("newValues!")
-//                             }
-                         
-//                         }
-//                     }
-
-//                     if (!newValues) continue;
-//                 }
-
-
-
-
-//                 // const name = extractName(line);
-//                 // const email = emails[0];
-
-//                 result[role] = responseObj; // map over later to make this <<<<
-
-//                 // result[role] = name ? `${name} – ${email}` : email; // map over later to make this <<<<
-//             }
-//             // later: replace null fields individually??
-//         }
-//      }
-     
-//      return result
-// }
 
 
 let blankResult = {
