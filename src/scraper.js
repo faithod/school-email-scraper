@@ -1,11 +1,18 @@
 const axios = require('axios');
 const extractURLs = require('./helpers/extract-urls');
 const findContactLinks = require('./helpers/find-contact-links'); 
-const extractCorrectEmails = require('./helpers/extract-correct-emails'); 
-const { launch } = require('puppeteer');
+const { extractCorrectEmails } = require('./helpers/extract-correct-emails'); 
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const { roleNameMap } = require("../data/index");
 const pdf = require('pdf-parse');
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+// puppeteer-extra => a powerful extension to the Puppeteer framework
+//  it introduces the plugin puppeteer-extra-plugin-stealth (which enhances stealth and anonymity during web scraping) (applies various evasion techniques to make it harder for websites to detect the requests as coming from a bot)
+//  & also other plugins designed to address common challenges encountered during scraping tasks (like for battling captcha: puppeteer-extra-plugin-recaptcha)
+
+// use the Stealth plugin
+puppeteer.use(StealthPlugin());
 
 // STEPS =>
 // parse csv (extract all website urls from csv file)
@@ -99,7 +106,7 @@ async function scrapeSchool({ name, url }, page) {
             result = await extractCorrectEmails(link, data, result, isPDF);
         }
     } catch (error) {
-        console.warn(`Ran into error whilst trying to scrape school: ${name}, error:`, error?.message);
+        console.warn(`Ran into error whilst trying to scrape school: ${name}, error:`, error?.message, "status:", error?.status);
     }
     
     console.log("final result:", result);
@@ -152,7 +159,7 @@ let blankResult = {
     const [schools, existingRows] = await extractURLs();
     let emailsFound = 0;
 
-    const browser = await launch({ headless: true });
+    const browser = await puppeteer.launch({ headless: true }); // need: { headless: true } (?) - apparently its slower & more detectable...
     const page = await browser.newPage();
 
 
@@ -189,7 +196,6 @@ let blankResult = {
         const promises = chunk.map(school =>
             limit(async () => {
                 let result = blankResult;
-                // let currentSchoolEmails = 0;
 
                 try {
                     result = await scrapeSchool(school, page);
@@ -199,18 +205,7 @@ let blankResult = {
 
                 for (const arr of Object.values(result)) {
                     emailsFound += arr.length;
-                    // currentSchoolEmails += arr.length;
                 }
-
-                // if (currentSchoolEmails === 0) {
-                //     // try again with pupetteer
-                //     try {
-                //         result = await scrapeSchool(school, page);
-                //     } catch (error) {
-                //         console.warn(`Failed to scrape school ${school.name}: ${error?.message}`);
-                //     }
-                //     // then count emails again
-                // }
 
                 const currentSchool = existingRows.find(row => row['School Name'] === school.name);
 

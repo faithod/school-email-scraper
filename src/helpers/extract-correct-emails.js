@@ -1,5 +1,5 @@
 const cheerio = require('cheerio');
-const { roleRegexMap } = require("../../data/index")
+const { roleRegexMap } = require("../../data/index");
 
 const isTheRelevantDeputyHead = (context) => {
     const roleMatches = ["pastor", "safeguarding"];
@@ -20,10 +20,13 @@ async function extractCorrectEmails(link, html, result, isPDF) {
             return `${name} <a href="mailto:${email}">${email}</a>`;
         })
 
-    // modifiedHtml = html.replace(/<a\s+href=["']mailto:([^"']+)["'][^>]*>(.*?)<\/a>/gi, (_, emailHref, linkText) => {
-    //     return `${emailHref}`;
-    // });
-    //
+    // for: <a href="mailto:lsproat@thomastallis.org.uk"> (mailto)
+    modifiedHtml = modifiedHtml.replace(/<a\s+href=["']mailto:([^"']+)["'][^>]*>(.*?)<\/a>/gi, (_, emailHref, linkText) => {
+        return `email:${emailHref}`;
+    });
+
+    // add spaces where there is <br> (e.g. HEADTEACHERMr)
+    modifiedHtml = modifiedHtml.replace(/<br>/g, " ");
 
     // mt >>
     // replace js formatted 'mailto' emails with actual emails
@@ -31,6 +34,8 @@ async function extractCorrectEmails(link, html, result, isPDF) {
     //     console.log("match", match)
     //     return `${user}@${domain}`;
     // });
+
+    // can do -> if theres a parenthesis directly after -> capture what's inside
 
     const $ = cheerio.load(modifiedHtml);
     const allText = isPDF ? html : $('body').text();
@@ -87,6 +92,9 @@ async function extractCorrectEmails(link, html, result, isPDF) {
 
                 const emailsWithinTheContext = [...context.matchAll(emailRegex)]
                 if (emailsWithinTheContext.length) {
+                    // console.log("actual email index", emailIndex);
+
+
                     // console.log("emailsWithinTheContext", emailsWithinTheContext.map(e => e[0]));
 
                     for (const match of emailsWithinTheContext) {
@@ -95,8 +103,12 @@ async function extractCorrectEmails(link, html, result, isPDF) {
                         const matchedEmailIndex = emailMatches.find(m => m[0] === matchedEmail)?.index
 
                         if (matchedEmail !== email && matchedEmailIndex < emailIndex) {
-                            const start = matchedEmailIndex;
+                            const start = matchedEmailIndex + matchedEmail.length;
                             const relevantContext = allText.slice(start, emailIndex);
+
+                            // console.log("emails within the context! >", emailsWithinTheContext.map(m => `${m[0]} - index: ${matchedEmailIndex}`));
+                            // console.log("relevantContext", relevantContext);
+
 
                             /* ahh so is this turning: [random-texttt email@domain.com text-we're-looking-for email@domain.com]
                                 into:  [email@domain.com text-we're-looking-for email@domain.com] (basically the text between emails...) 
@@ -154,6 +166,13 @@ async function extractCorrectEmails(link, html, result, isPDF) {
                     }
                 }
                 //
+
+
+                // hmm we could also check for full stops..
+                // const actualContext = context.match(/\./i)
+                // const fullStop = context.match(/\./i) // if theres a full stop, cut whats before it?????  <<< consider it
+                // .match(/(?<!\.)\.(?!\.)/)
+
 
 
                 // don't save dupe values

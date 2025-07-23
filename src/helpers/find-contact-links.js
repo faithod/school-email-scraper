@@ -4,7 +4,7 @@ const keyWords = [
     'staff', 'team', 'contact', 'lead', 'about', 'dsl', 'safeguarding', 
     'key', 'pshe', 'pshc', 'pastor', 'wellbeing', 'protection', "staff", 
     "support", 'health', "faculties", "safety", "counsel", "find", "safe", 
-    "policies", "send"
+    "policies", "send"// policy (but sometimes matches too much...)
 ]; 
 // pdf
 
