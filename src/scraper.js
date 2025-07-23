@@ -5,6 +5,7 @@ const extractCorrectEmails = require('./helpers/extract-correct-emails');
 const { launch } = require('puppeteer');
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const { roleNameMap } = require("../data/index");
+const pdf = require('pdf-parse');
 
 // STEPS =>
 // parse csv (extract all website urls from csv file)
@@ -73,18 +74,30 @@ async function scrapeSchool({ name, url }, browser) {
 
         // call extractEmails on each page
         for (const link of contactLinks) {
+            const isPDF = link.endsWith(".pdf");
             let data;
             // let dynamicHTML;
             try {
-                const page = await axios.get(link, { timeout: 20000 });
-                data = page.data;
-                // dynamicHTML = await fetchDynamicHTML(link, browser); // ONLY USE IF ITS EMPTY FOR A SCHOOL! >> ON A SECOND ITERATION?
+                if (isPDF) {
+                    const { data: pdfData } = await axios.get(link, {
+                        responseType: 'arraybuffer', // get raw binary data
+                    });
+
+                    const dataBuffer = Buffer.from(pdfData);
+                    const parsed = await pdf(dataBuffer);
+
+                    data = parsed.text // error: "Warning: TT: undefined function: 32" means that parsed.text might be missing text
+                } else {
+                    const page = await axios.get(link, { timeout: 20000 });
+                    data = page.data;
+                    // dynamicHTML = await fetchDynamicHTML(link, browser); // ONLY USE IF ITS EMPTY FOR A SCHOOL! >> ON A SECOND ITERATION?
+                }
             } catch (err) {
                 console.error(`COULDNT FETCH FROM LINK, url: ${link} - ERROR: ${err.message}`);
                 continue;
             }
 
-            result = await extractCorrectEmails(link, data, result);
+            result = await extractCorrectEmails(link, data, result, isPDF);
         }
     } catch (error) {
         console.warn(`Ran into error whilst trying to scrape school: ${name}, error:`, error?.message);

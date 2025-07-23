@@ -1,7 +1,7 @@
 // ohh they show based on priority...
 const roleRegexMap = {
   dsl: /designated safeguarding lead|safeguarding lead/i, // DOES ADDING JUST 'SAFEGAURDING' CHANGE THINGS??
-  pshe: /pshe lead|pshe teacher|personal, social/i, // Personal, Social, Health hmmm
+  pshe: /pshe lead|pshe teacher|personal, social|personal social health/i,
   pastoral: /head of pastoral care|pastoral lead|pastoral care|pastoral/i,
   mental_health: /mental health lead|school counsellor|wellbeing lead|counsellor|Counselling/i, // Wellbeing Practitioner?
   safeguarding_officer: /safeguarding officer|child protection officer/i,

@@ -2,7 +2,7 @@ const cheerio = require('cheerio');
 const { roleRegexMap } = require("../../data/index")
 
 // extract all emails from a page & return only the correct emails
-async function extractCorrectEmails(link, html, result) {
+async function extractCorrectEmails(link, html, result, isPDF) {
     // for each email, go abit backwards by some characters (decision -- only looking behind the email)
     // use this snippet - if there is a role match - push it inn?
 
@@ -27,7 +27,7 @@ async function extractCorrectEmails(link, html, result) {
     // });
 
     const $ = cheerio.load(modifiedHtml);
-    const allText = $('body').text();
+    const allText = isPDF ? html : $('body').text();
 
     const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,}/g;
     const emailMatches = [...allText.matchAll(emailRegex)]
@@ -50,7 +50,7 @@ async function extractCorrectEmails(link, html, result) {
 
         // find matches within the context
         for (const [roleKey, regex] of Object.entries(roleRegexMap)) {
-            const altMatch = (roleKey === "dsl" && email.toLowerCase().includes("safeguarding")) || (roleKey === "pshe" && email.toLowerCase().includes(roleKey)) || (roleKey === "headteacher" && email.toLowerCase().match(/office@|admin|head/i) && !email.includes(".gov.uk") && result[roleKey]?.length === 0) // is that accurate for headteachers...?
+            const altMatch = (roleKey === "dsl" && email.toLowerCase().includes("safeguarding@")) || (roleKey === "pshe" && email.toLowerCase().includes(roleKey)) || (roleKey === "headteacher" && email.toLowerCase().match(/office@|admin|head/i) && !email.includes(".gov.uk") && result[roleKey]?.length === 0) // is that accurate for headteachers...?
             
             if (regex.test(context) || altMatch) {
                 console.log("role:", roleKey);
