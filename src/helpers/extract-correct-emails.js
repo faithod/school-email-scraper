@@ -1,6 +1,12 @@
 const cheerio = require('cheerio');
 const { roleRegexMap } = require("../../data/index")
 
+const isTheRelevantDeputyHead = (context) => {
+    const roleMatches = ["pastor", "safeguarding"];
+    return roleMatches.some(role => context.toLowerCase().includes(role)) || context.includes("DSL");
+}
+
+
 // extract all emails from a page & return only the correct emails
 async function extractCorrectEmails(link, html, result, isPDF) {
     // for each email, go abit backwards by some characters (decision -- only looking behind the email)
@@ -44,17 +50,21 @@ async function extractCorrectEmails(link, html, result, isPDF) {
         const whereToStart = allText.slice(0, emailIndex).length <= 115 ? 0 : emailIndex - 115 // change num <<<*
         const context = allText.slice(whereToStart, emailIndex);
 
-        console.log("Current Email:", email);
-        console.log("context:", `(${context})`);
+        // console.log("Current Email:", email);
+        // console.log("context:", `(${context})`);
         // improvent: only get context after email if....it has a match and theres no email infront of that match?? <<<
 
         // find matches within the context
         for (const [roleKey, regex] of Object.entries(roleRegexMap)) {
-            const altMatch = (roleKey === "dsl" && email.toLowerCase().includes("safeguarding@")) || (roleKey === "pshe" && email.toLowerCase().includes(roleKey)) || (roleKey === "headteacher" && email.toLowerCase().match(/office@|admin|head/i) && !email.includes(".gov.uk") && result[roleKey]?.length === 0) // is that accurate for headteachers...?
-            
+            const altMatch = (roleKey === "dsl" && email.toLowerCase().includes("safeguarding")) || (roleKey === "pshe" && email.toLowerCase().includes(roleKey)) || (roleKey === "headteacher" && email.toLowerCase().match(/office@|admin|head/i) && !email.includes(".gov.uk") && result[roleKey]?.length === 0) // is that accurate for headteachers...?
+            // remove dsl email if it includes the word 'govenor'?
+
             if (regex.test(context) || altMatch) {
+                console.log("a match!");
+                console.log("Current Email:", email);
                 console.log("role:", roleKey);
                 console.log("context with matches:", `(${context})`);
+                console.log("match is from url:", link)
 
                 // logic for matching 'DSL':
                 // ADDD TO altMatch =>>>>>>>>>  || /DSL/.test(context)) 
@@ -63,7 +73,7 @@ async function extractCorrectEmails(link, html, result, isPDF) {
 
 
                 if (roleKey === "deputy_head") {
-                    if (!context.toLowerCase().includes("pastor") && !context.toLowerCase().includes("safeguarding") && !context.includes("DSL")){
+                    if (!isTheRelevantDeputyHead(context)){
                         console.log("ignoreee")
                         continue;
                     }
@@ -88,8 +98,19 @@ async function extractCorrectEmails(link, html, result, isPDF) {
                             const start = matchedEmailIndex;
                             const relevantContext = allText.slice(start, emailIndex);
 
+                            /* ahh so is this turning: [random-texttt email@domain.com text-we're-looking-for email@domain.com]
+                                into:  [email@domain.com text-we're-looking-for email@domain.com] (basically the text between emails...) 
+                            */
+
                             if (!regex.test(relevantContext)) push = false;
                             if (altMatch) push = true;
+
+                            // remember deputy head must include 'pastoral' etc.
+                            if (roleKey === "deputy_head" && regex.test(relevantContext)) {
+                                if (!isTheRelevantDeputyHead(relevantContext)) {
+                                    push = false;
+                                }
+                            }
                         }
                     }
                 }
@@ -97,6 +118,7 @@ async function extractCorrectEmails(link, html, result, isPDF) {
 
                 let emailToPush = email;
 
+                const deputyDSLMatch = context.match(/Deputy Designated Safeguarding Lead/i); // think of other ways this is written
 
                 //
                 // make sure there isnt another match with a higher index...
@@ -124,7 +146,6 @@ async function extractCorrectEmails(link, html, result, isPDF) {
 
                             // could this go wrong? // test...
                             // this is extra tbh...
-                            const deputyDSLMatch = context.match(/Deputy Designated Safeguarding Lead/i); // think of other ways this is written
                             if (roleKey === "dsl" && deputyDSLMatch && otherMatch.index < deputyDSLMatch.index) {
                                 emailToPush = `${emailToPush} - (Deputy)`
                             }
@@ -161,13 +182,20 @@ async function extractCorrectEmails(link, html, result, isPDF) {
                     // if (context.toLowerCase().includes("headteacher's pa") || context.toLowerCase().includes("headteacher pa") || context.includes("PA")) {
                     //     emailToPush = `${emailToPush} - (PA)`
                     // }
+
+                    // so, only allow 2 headteacher emails????
                 }
 
                 if (roleKey === "mental_health") {
                     emailToPush = `${emailToPush} - (${context.match(regex)?.[0]})`
                 }
 
-                // improvement: >>>>>>>>
+                // add 'deputy' to make it distinct
+                if (!emailToPush.includes("- (Deputy)") && roleKey === "dsl" && context.match(/designated safeguarding lead|safeguarding lead/gi)?.length === 1 && deputyDSLMatch) {
+                    emailToPush = `${emailToPush} - (Deputy)`
+                }
+
+                // improvement: >>>>>>>> (this shouldnt be matched now I think..)
                     ` Pastoral: pastoral@oaklandsschool.com
 
                     Premises: premises@oaklandsschool.com` // >> premises@oaklandsschool.com was matched for pastoral
@@ -186,4 +214,4 @@ async function extractCorrectEmails(link, html, result, isPDF) {
   return result;
 }
 
-module.exports = extractCorrectEmails;
+module.exports = { extractCorrectEmails, isTheRelevantDeputyHead };
