@@ -6,7 +6,7 @@ async function findContactLinks(baseUrl, homepageHtml) {
     const $ = cheerio.load(homepageHtml);
     const anchors = $('a').toArray();
 
-    const keyWords = ['staff', 'team', 'contact', 'lead', 'about', 'dsl', 'safeguarding', 'key', 'pshe', 'pshc', 'pastor', 'wellbeing', 'protection', "staff", "support", 'health', "faculties", "safety", "counsel", "find"];
+    const keyWords = ['staff', 'team', 'contact', 'lead', 'about', 'dsl', 'safeguarding', 'key', 'pshe', 'pshc', 'pastor', 'wellbeing', 'protection', "staff", "support", 'health', "faculties", "safety", "counsel", "find", "safe"];
     const foundLinks = [];
 
     for (const a of anchors) {
