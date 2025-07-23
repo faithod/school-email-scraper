@@ -23,19 +23,19 @@ const pdf = require('pdf-parse');
 // gets correct emails
 // etc.
 
-// NOT GONE OVER >>>>
 // the raw html sometimes didnt have what I could see on the page
-async function fetchDynamicHTML(url, browser) {
-  const page = await browser.newPage();
-  await page.goto(url, { waitUntil: 'networkidle2' }); // wait for all JS to finish
+async function fetchDynamicHTML(url, page) {
+  await page.goto(url, { waitUntil: 'networkidle2', timeout: 20000 }); // wait for all JS to finish // find out actual timeout needed, dont want it too long
 
-  const html = await page.content();
-    await page.close(); // Close the tab, not the browser
-  return html;
+  return await page.content();
+//   await page.close(); // Close the tab, not the browser
 }
 
+// networkidle2 =  waits until there are no more than 2 network connections for at least 500 milliseconds 
+// (so the page has mostly finished loading)
+
 // scrape a single school
-async function scrapeSchool({ name, url }, browser) { 
+async function scrapeSchool({ name, url }, page) { 
 
     // make sure: result is being correctly filled in, & e.g. we arnt overriding emails found ect.
     let result = {
@@ -65,8 +65,8 @@ async function scrapeSchool({ name, url }, browser) {
         const validURL = url.includes("http") ? fixedURL || url : !url.includes("www.") ? `http://www.${url}` : `http://${url}` /* if the url contains neither http(s) or www. */
         
         // find relevant links
-        const { data } = await axios.get(validURL, { timeout: 20000 });
-        const contactLinks = await findContactLinks(validURL, data);  
+        const html = await fetchDynamicHTML(validURL, page);
+        const contactLinks = await findContactLinks(validURL, html, page);  
         console.log("contactLinks", contactLinks); 
          
         // .filter(contactLink => contactLink.includes()) //  \.pdf$/i // add homepage url?
@@ -79,7 +79,7 @@ async function scrapeSchool({ name, url }, browser) {
             // let dynamicHTML;
             try {
                 if (isPDF) {
-                    const { data: pdfData } = await axios.get(link, {
+                    const { data: pdfData } = await axios.get(link, { // dont need pupeteer for pdfs i guess..?
                         responseType: 'arraybuffer', // get raw binary data
                     });
 
@@ -88,9 +88,8 @@ async function scrapeSchool({ name, url }, browser) {
 
                     data = parsed.text // error: "Warning: TT: undefined function: 32" means that parsed.text might be missing text
                 } else {
-                    const page = await axios.get(link, { timeout: 20000 });
-                    data = page.data;
-                    // dynamicHTML = await fetchDynamicHTML(link, browser); // ONLY USE IF ITS EMPTY FOR A SCHOOL! >> ON A SECOND ITERATION?
+                    data = await fetchDynamicHTML(link, page);
+                    // ONLY USE IF ITS EMPTY FOR A SCHOOL! >> ON A SECOND ITERATION?
                 }
             } catch (err) {
                 console.error(`COULDNT FETCH FROM LINK, url: ${link} - ERROR: ${err.message}`);
@@ -153,8 +152,9 @@ let blankResult = {
     const [schools, existingRows] = await extractURLs();
     let emailsFound = 0;
 
-    let browser;
-    // const browser = await launch({ headless: true });
+    const browser = await launch({ headless: true });
+    const page = await browser.newPage();
+
 
 
     // testing:
@@ -189,16 +189,28 @@ let blankResult = {
         const promises = chunk.map(school =>
             limit(async () => {
                 let result = blankResult;
+                // let currentSchoolEmails = 0;
 
                 try {
-                    result = await scrapeSchool(school, browser);
+                    result = await scrapeSchool(school, page);
                 } catch (error) {
                     console.warn(`Failed to scrape school ${school.name}: ${error?.message}`);
                 }
 
                 for (const arr of Object.values(result)) {
                     emailsFound += arr.length;
+                    // currentSchoolEmails += arr.length;
                 }
+
+                // if (currentSchoolEmails === 0) {
+                //     // try again with pupetteer
+                //     try {
+                //         result = await scrapeSchool(school, page);
+                //     } catch (error) {
+                //         console.warn(`Failed to scrape school ${school.name}: ${error?.message}`);
+                //     }
+                //     // then count emails again
+                // }
 
                 const currentSchool = existingRows.find(row => row['School Name'] === school.name);
 
@@ -246,7 +258,7 @@ let blankResult = {
         await Promise.all(promises); // do we want it in order... ehh
     }
 
-    // await browser.close();
+    await browser.close();
     console.log(`CSV writing complete! -- ${emailsFound} emails found`);
 })();
 
