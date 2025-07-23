@@ -10,13 +10,10 @@ async function extractURLs() {
         fs.createReadStream("data/list-of-schools.csv")
             .pipe(csv())
             .on('data', (row) => {
-                // if (row.Website) {
-                    schools.push({ name: row['School Name'] || '', url: row.Website || '' });
-                    existingRows.push(row);
-                // }
-                // row.Website can be empty
+                schools.push({ name: row['School Name'] || '', url: row.Website || '' });
+                existingRows.push(row);
             })
-            .on('end', () => resolve([schools, existingRows]))
+            .on('end', () => resolve([schools, existingRows])) // improvement: just return existingRows(w/ a different name) and map to make { name, url } ...
             .on('error', reject);
     });
 }

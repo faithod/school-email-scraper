@@ -14,7 +14,7 @@ const openAI = new OpenAI({
 // also you are limited per minute so I could delay a minute after a certain amount of requests
 
 
-// using AI to get names and emails after using selectors....
+// Validate Page Content with AI - using AI to get names and emails after using selectors....
 async function getGPTResponse(html) {
 
     const prompt = 

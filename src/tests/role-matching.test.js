@@ -1,10 +1,10 @@
 const { describe, expect, test } = require('@jest/globals');
-const roleRegexMap = require("../data");
+const { roleRegexMap } = require("../../data/index");
 
 const validRoleMap = {
   dsl: ["Designated Safeguarding Lead", "Safeguarding Lead", "designated safeguarding lead", "safeguarding lead"], // "DSL", "    DSL   "
 
-// extend later
+/* extend later */
 //   pshe: /pshe lead|pshe teacher|personal, social/i,
 //   pastoral: /head of pastoral care|pastoral lead|pastoral care|pastoral/i,
 //   mental_health: /mental health lead|school counsellor|wellbeing lead|counsellor|Counselling/i,
@@ -62,3 +62,4 @@ describe('make sure roleRegexMap is actually matching the correct roles', () => 
     });
 });
 
+// also make tests for every regex I used...
