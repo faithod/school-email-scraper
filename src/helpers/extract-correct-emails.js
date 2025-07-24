@@ -6,9 +6,11 @@ const isTheRelevantDeputyHead = (context) => {
     return roleMatches.some(role => context.toLowerCase().includes(role)) || context.includes("DSL");
 }
 
+const emailDomainRegex = /@[^\.]+/;
+
 
 // extract all emails from a page & return only the correct emails
-async function extractCorrectEmails(link, html, result, isPDF) {
+async function extractCorrectEmails(link, html, result, isPDF, occurances) {
     // for each email, go abit backwards by some characters (decision -- only looking behind the email)
     // use this snippet - if there is a role match - push it inn?
 
@@ -51,6 +53,10 @@ async function extractCorrectEmails(link, html, result, isPDF) {
         const email = match[0];
         const emailIndex = match.index;
         if (emailIndex === undefined) continue;
+
+        // log email occurances
+        const emailDomain = email.match(emailDomainRegex)?.[0];
+        occurances[emailDomain] = occurances[emailDomain] === undefined ? 0 : occurances[emailDomain] + 1;
 
         const whereToStart = allText.slice(0, emailIndex).length <= 115 ? 0 : emailIndex - 115 // change num <<<*
         const context = allText.slice(whereToStart, emailIndex);
@@ -223,14 +229,26 @@ async function extractCorrectEmails(link, html, result, isPDF) {
                 /// ^^^^^^^^^
 
 
+                // stop random domains passing through... 
+                if (Object.keys(occurances).length > 1) {
+                    const emailOccurances = occurances[emailDomain];
+
+                    for (const domainKey in occurances) {
+                        const num = occurances[domainKey];
+                        if (num > emailOccurances) {
+                            push = false;
+                        }
+                    }
+                }
+
                 if (!result[roleKey].includes(emailToPush) && push) {
                     result[roleKey].push(emailToPush);
                 }             
             }
         }
     }
-
+    
   return result;
 }
 
-module.exports = { extractCorrectEmails, isTheRelevantDeputyHead };
+module.exports = { extractCorrectEmails, isTheRelevantDeputyHead, emailDomainRegex };

@@ -79,6 +79,14 @@ async function scrapeSchool({ name, url }, page) {
         // .filter(contactLink => contactLink.includes()) //  \.pdf$/i // add homepage url?
         // improvement - filter out pdfs before u loop... // or convert pdf file to text...
 
+        let occurances = {};      
+        /*
+            should look like: {
+                @domain: 5
+                @anotherDomain: 2
+            } 
+        */      
+
         // call extractEmails on each page
         for (const link of contactLinks) {
             const isPDF = link.includes(".pdf"); // instead: INCLUDES .PDF (BC OF QUERY STRINGS!)
@@ -103,8 +111,9 @@ async function scrapeSchool({ name, url }, page) {
                 continue;
             }
 
-            result = await extractCorrectEmails(link, data, result, isPDF);
+            result = await extractCorrectEmails(link, data, result, isPDF, occurances);
         }
+            console.log("final occurances", occurances);
     } catch (error) {
         console.warn(`Ran into error whilst trying to scrape school: ${name}, error:`, error?.message, "status:", error?.status);
     }
@@ -183,7 +192,7 @@ let blankResult = {
     /* */
 
     // const chunks = [schools.slice(0,2)]
-
+    
     // understanding...
     // Math.ceil(array.length / size) --> most likely around 10 => chunks length is then 10
     // slices example -> (0, 300) (300, 600) (600, 900)
