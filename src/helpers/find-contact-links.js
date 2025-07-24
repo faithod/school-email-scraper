@@ -2,7 +2,7 @@ const cheerio = require('cheerio');
 
 const keyWords = [
     'staff', 'team', 'contact', 'lead', 'about', 'dsl', 'safeguarding', 
-    'key', 'pshe', 'pshc', 'pastor', 'wellbeing', 'protection', "staff", 
+    'key', 'pshe', 'pshc', 'pastor', 'wellbeing', 'protect', "staff", 
     "support", 'health', "faculties", "safety", "counsel", "find", "safe", 
     "policies", "send"// policy (but sometimes matches too much...)
 ]; 
@@ -21,7 +21,7 @@ async function findContactLinks(baseUrl, homepageHtml, page, currentUrl = baseUr
 
     if (currentDepth !== 0) {
         try {
-            await page.goto(currentUrl, { waitUntil: 'networkidle2', timeout: 20000 });
+            await page.goto(currentUrl, { waitUntil: 'networkidle2', timeout: 20000 }); // ["domcontentloaded", "networkidle2"] (more robust?)
             html = await page.content();
         } catch (err) {
             console.error(`Failed to load nested page - ${currentUrl}: ${err.message}`);
@@ -38,13 +38,15 @@ async function findContactLinks(baseUrl, homepageHtml, page, currentUrl = baseUr
     // check all pdfs without checking keywords?
 
     // make sure share links dont pass through
-    const begginingOfBaseUrl = baseUrl.match(/www\.[^\.]+/)?.[0];
+    const begginingOfBaseUrl = baseUrl.match(/www\.[^\.]+/)?.[0]; // test this
     const altBaseUrl = baseUrl.replace(/^http(?!s)/, "https");
     
 
     for (const a of anchors) {
         const href = ($(a).attr('href') || "").toLowerCase();
         const title = ($(a).attr('title') || "").toLowerCase();
+        const isPDF = href.includes('.pdf');
+
 
         if (!href) continue;
 
@@ -56,8 +58,8 @@ async function findContactLinks(baseUrl, homepageHtml, page, currentUrl = baseUr
         const matchesKeyword = keyWords.some(word => href.includes(word) || title.includes(word));
         const sameDomain = fullUrl.includes(begginingOfBaseUrl) && (fullUrl.startsWith(baseUrl) || fullUrl.startsWith(altBaseUrl)); // << is this whole thing needed? 
 
-        if (matchesKeyword && sameDomain) {
-            foundLinks.add(fullUrl);
+        if (matchesKeyword && (sameDomain || isPDF)) {
+            foundLinks.add(isPDF ? ($(a).attr('href') || "") : fullUrl); // s3 urls are case sentitive (pdf may live on s3)
 
             try {
                 // Fetch and parse nested page

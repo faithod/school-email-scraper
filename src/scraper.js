@@ -81,7 +81,7 @@ async function scrapeSchool({ name, url }, page) {
 
         // call extractEmails on each page
         for (const link of contactLinks) {
-            const isPDF = link.endsWith(".pdf");
+            const isPDF = link.includes(".pdf"); // instead: INCLUDES .PDF (BC OF QUERY STRINGS!)
             let data;
             // let dynamicHTML;
             try {
@@ -206,6 +206,8 @@ let blankResult = {
                 for (const arr of Object.values(result)) {
                     emailsFound += arr.length;
                 }
+
+                // for headteacher, if there is an info|admin email, but theres also another email in there that isnt that, remove it?
 
                 const currentSchool = existingRows.find(row => row['School Name'] === school.name);
 
