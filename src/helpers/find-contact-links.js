@@ -4,13 +4,15 @@ const keyWords = [
     'staff', 'team', 'contact', 'lead', 'about', 'dsl', 'safeguarding', 
     'key', 'pshe', 'pshc', 'pastor', 'wellbeing', 'protect', "staff", 
     "support", 'health', "faculties", "safety", "counsel", "find", "safe", 
-    "policies", "send"// policy (but sometimes matches too much...)
+    "policies", "send", "policy", "complaint", "type=pdf" // policy (but sometimes matches too much...) // info // pdf was good but type=pdf to make it faster??
 ]; 
-// pdf
+// check pdf keywords I might have missed
 
 const visited = new Set();
 
 // go over this whole function again, not fully gone over
+
+// confused at what currentUrl is doing
 
 // find  staff/team/contact links for a url
 async function findContactLinks(baseUrl, homepageHtml, page, currentUrl = baseUrl, maxDepth = 6, currentDepth = 0) {
@@ -47,19 +49,25 @@ async function findContactLinks(baseUrl, homepageHtml, page, currentUrl = baseUr
         const title = ($(a).attr('title') || "").toLowerCase();
         const isPDF = href.includes('.pdf');
 
+        const hrefCaseSentitive = ($(a).attr('href') || "");
 
         if (!href) continue;
 
         // add 'communications'?? Curriculum? // chatgpt said: ''directory' aswell // "touch"
 
-        const fullUrl = href.startsWith('http') ? href : new URL(href, currentUrl).href; // necessary?
+        let fullUrl = href.startsWith('http') ? href : new URL(href, currentUrl).href; // necessary?
+        const fullUrlCaseSensitive = hrefCaseSentitive.startsWith('http') ? hrefCaseSentitive : new URL(hrefCaseSentitive, currentUrl).href;
 
+        if (fullUrl.includes("http") && !fullUrl.includes("www.")) {
+            fullUrl = fullUrl.replace("://", "://www.");
+            // could it (like with the base) contain neither?
+        }
 
         const matchesKeyword = keyWords.some(word => href.includes(word) || title.includes(word));
         const sameDomain = fullUrl.includes(begginingOfBaseUrl) && (fullUrl.startsWith(baseUrl) || fullUrl.startsWith(altBaseUrl)); // << is this whole thing needed? 
 
-        if (matchesKeyword && (sameDomain || isPDF)) {
-            foundLinks.add(isPDF ? ($(a).attr('href') || "") : fullUrl); // s3 urls are case sentitive (pdf may live on s3)
+        if (matchesKeyword && (sameDomain || isPDF) && !fullUrl.includes(".docx")) { // filter out docs for now...
+            foundLinks.add(isPDF ? fullUrlCaseSensitive : fullUrl); // s3 urls are case sentitive (pdf may live on s3)
 
             try {
                 // Fetch and parse nested page

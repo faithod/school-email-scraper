@@ -7,6 +7,8 @@ const isTheRelevantDeputyHead = (context) => {
 }
 
 const emailDomainRegex = /@[^\.]+/;
+const deputyDSLRegex = /Deputy\s+Designated\s+Safeguarding\s+Lead|\bDeputy\s+DSL\b/i // think of other ways this is written
+const deputyCPORegex = /deputy\s+(?:designated\s+)?safeguarding\s+officer|deputy\s+(?:designated\s+)?child\s+protection\s+officer/i // (?:designated\s+)? conditionally matches designated
 
 
 // extract all emails from a page & return only the correct emails
@@ -71,7 +73,7 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
             // remove dsl email if it includes the word 'govenor'?
 
             if (regex.test(context) || altMatch) {
-                console.log("a match!");
+                console.log("A match!");
                 console.log("Current Email:", email);
                 console.log("role:", roleKey);
                 console.log("context with matches:", `(${context})`);
@@ -136,7 +138,9 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
 
                 let emailToPush = email;
 
-                const deputyDSLMatch = context.match(/Deputy Designated Safeguarding Lead/i); // think of other ways this is written
+                const deputyDSLMatch = context.match(deputyDSLRegex);
+                const deputyCPOMatch = context.match(deputyCPORegex);
+
 
                 //
                 // make sure there isnt another match with a higher index...
@@ -204,7 +208,7 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
 
                 if (roleKey === "headteacher") { 
                     // forget this for now... // need to fine tune it... // extra stufff
-                    // if (context.toLowerCase().includes("headteacher's pa") || context.toLowerCase().includes("headteacher pa") || context.includes("PA")) {
+                    // if (context.toLowerCase().includes("headteacher's pa") || context.toLowerCase().includes("headteacher pa") || context.includes("PA")) { 'PA to the Headteacher'
                     //     emailToPush = `${emailToPush} - (PA)`
                     // }
 
@@ -220,6 +224,10 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
                     emailToPush = `${emailToPush} - (Deputy)`
                 }
 
+                if (!emailToPush.includes("- (Deputy)") && roleKey === "safeguarding_officer" && deputyCPOMatch) {
+                    emailToPush = `${emailToPush} - (Deputy)`
+                }
+
                 // improvement: >>>>>>>> (this shouldnt be matched now I think..)
                     ` Pastoral: pastoral@oaklandsschool.com
 
@@ -229,7 +237,7 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
                 /// ^^^^^^^^^
 
 
-                // stop random domains passing through... 
+                // stop random domains passing through... TEST WITH & WITHOUT THIS
                 if (Object.keys(occurances).length > 1) {
                     const emailOccurances = occurances[emailDomain];
 
@@ -251,4 +259,4 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
   return result;
 }
 
-module.exports = { extractCorrectEmails, isTheRelevantDeputyHead, emailDomainRegex };
+module.exports = { extractCorrectEmails, isTheRelevantDeputyHead, emailDomainRegex, deputyCPORegex };
