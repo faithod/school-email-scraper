@@ -6,6 +6,8 @@ const { deputyCPORegex } = require('../helpers/extract-correct-emails');
 // const deputyDSL = [
 // ];
 
+// Deputy Designated Safeguarding Lead, Deputy Safeguarding Lead, Deputy DSL `Deputy\nDesignated\nSafeguarding\nLead` `Deputy \n Designated \n Safeguarding\nLead`
+
 // const invalidDeputyDSL = [
 // ];
 

@@ -1,5 +1,6 @@
 const cheerio = require('cheerio');
 const { roleRegexMap } = require("../../data/index");
+const validator = require('validator');
 
 const isTheRelevantDeputyHead = (context) => {
     const roleMatches = ["pastor", "safeguarding"];
@@ -7,12 +8,14 @@ const isTheRelevantDeputyHead = (context) => {
 }
 
 const emailDomainRegex = /@[^\.]+/;
-const deputyDSLRegex = /Deputy\s+Designated\s+Safeguarding\s+Lead|\bDeputy\s+DSL\b/i // think of other ways this is written
+const deputyDSLRegex = /Deputy\s+(?:Designated\s+)?Safeguarding\s+Lead|\bDeputy\s+DSL\b/i // think of other ways this is written
 const deputyCPORegex = /deputy\s+(?:designated\s+)?safeguarding\s+officer|deputy\s+(?:designated\s+)?child\s+protection\s+officer/i // (?:designated\s+)? conditionally matches designated
 
 
 // extract all emails from a page & return only the correct emails
 async function extractCorrectEmails(link, html, result, isPDF, occurances) {
+    const { default: chalk } = await import('chalk'); // temp
+
     // for each email, go abit backwards by some characters (decision -- only looking behind the email)
     // use this snippet - if there is a role match - push it inn?
 
@@ -31,6 +34,12 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
 
     // add spaces where there is <br> (e.g. HEADTEACHERMr)
     modifiedHtml = modifiedHtml.replace(/<br>/g, " ");
+
+    modifiedHtml = modifiedHtml.replace(/(?<=>)[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,}(?=<)/g, m => ` ${m} `); // added; (?<=>), (?=<)
+    // add space on each side of email
+    // to avoid getting this in allText: Miss B DaviesSafeguarding (DSL)020 8498 1338safeguarding@kshsonline.ukdocument.getElementById > email becomes: 1338safeguarding@kshsonline.ukdocument.get
+    // html was: `<span id="eeb-480794-390645">safeguarding@kshsonline.uk</span><script type="text/javascript">document.getElementById("eeb-480794-390645").innerHTML = eval(decodeURIComponent("%27%73%61%66%65%67%75%61%72%64%69%6e%67%40%6b%73%68%73%6f%6e%6c%69%6e%65%2e%75%6b%27"))</script><noscript>*protected email*</noscript></a>`
+    // does this break anything?...
 
     // mt >>
     // replace js formatted 'mailto' emails with actual emails
@@ -69,7 +78,7 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
 
         // find matches within the context
         for (const [roleKey, regex] of Object.entries(roleRegexMap)) {
-            const altMatch = (roleKey === "dsl" && email.toLowerCase().includes("safeguarding")) || (roleKey === "pshe" && email.toLowerCase().includes(roleKey)) || (roleKey === "headteacher" && email.toLowerCase().match(/office@|admin|head/i) && !email.includes(".gov.uk") && result[roleKey]?.length === 0) // is that accurate for headteachers...?
+            const altMatch = (roleKey === "dsl" && (email.toLowerCase().includes("safeguarding") || email.toLowerCase().startsWith("dsl@"))) || (roleKey === "pshe" && email.toLowerCase().includes(roleKey)) || (roleKey === "headteacher" && email.toLowerCase().match(/office@|admin|head/i) && !email.includes(".gov.uk") && result[roleKey]?.length === 0) || (roleKey === "safeguarding_officer" && email.toLowerCase().match(/childprotection@/i)) // is that accurate for headteachers...? 
             // remove dsl email if it includes the word 'govenor'?
 
             if (regex.test(context) || altMatch) {
@@ -136,6 +145,25 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
                 }
                 //
 
+                /* edge case: wrong match purely due to the match being too close to a random email: */
+                const actualRoleMatchIndex = context.match(regex)?.index;
+                const newContextStart = context.match(/(?<=\bfor\b)(.*?)(?=\bcontact\b)|\bSENCo\b|\bdirector\s+of\b|\bchair\s+of\b/i); // KEEP ADDING TO THIS // matches: `for .... contact` - also other roles (that ill keep adding)
+                // could this match twice?
+
+                // basically if another role is in front, dont push
+
+                if (newContextStart && actualRoleMatchIndex && (newContextStart.index > actualRoleMatchIndex)) {
+                    push = false;
+                    console.log(chalk.yellow("edge case: dont push in"))
+                }
+                /* */
+
+                // 1 of the ways im tackling invalid emails from a pdf
+                if (!validator.isEmail(email)) {
+                    push = false;
+                    console.log(chalk.red("invalid email!!"), email)
+                }
+
                 let emailToPush = email;
 
                 const deputyDSLMatch = context.match(deputyDSLRegex);
@@ -148,7 +176,7 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
                     // if there is another match in the context...
                     if (key !== roleKey && otherRegex.test(context)) {
                         const actualRoleMatch = context.match(regex); // should this be index in line?
-                        const otherMatch = context.match(otherRegex);
+                        const otherMatch = context.match(otherRegex); 
 
                         // check this when less tired // is this needed since its already true..?
                         // if (!actualRoleMatch && altMatch) {
@@ -160,22 +188,60 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
 
 
                         if (actualRoleMatch) {
-                            // if the other match is greater/closer to the email, dont match??
-                            if (otherMatch.index > actualRoleMatch.index) {
-                                push = false
-                                // fixes the wrong match in school 6
-                            }
 
                             // could this go wrong? // test...
                             // this is extra tbh...
                             if (roleKey === "dsl" && deputyDSLMatch && otherMatch.index < deputyDSLMatch.index) {
                                 emailToPush = `${emailToPush} - (Deputy)`
                             }
+
+
+                            // if the other match is greater/closer to the email, dont match??
+                            if (otherMatch.index > actualRoleMatch.index) {
+                            
+
+                                /* looking at what exactly is between these matches */
+                                const [startIdx, endIdx] = [actualRoleMatch.index + actualRoleMatch[0]?.length, otherMatch.index - 1]
+                                const numOfCharsBetweenMatches = endIdx - startIdx;
+                                const contextBetweenMatches = context.slice(startIdx, endIdx)
+                                console.log("numOfCharsBetweenMatches", numOfCharsBetweenMatches);
+                                console.log("whats between:", contextBetweenMatches);
+
+                                const priority = ["dsl", "pastoral"];
+
+                                if (numOfCharsBetweenMatches <= 4 & ["-", "&"].some(char => contextBetweenMatches.includes(char))) {
+                                    /* 
+                                        gonna be more specific so we don't break anything:
+                                        so, the 2 things that can relate are => (DSL/Pastoral Lead) & deputy headteacher
+                                        so if the current match is dsl/pastoral & the other match is deputy (& all these conditions are true) -> push it in!
+
+                                        e.g. Designated Safeguarding Lead - Deputy Headteacher
+                                     */
+                                    if (priority.includes(roleKey) && key === "deputy_head") {
+                                        console.log("still push in");
+                                        continue; 
+                                        // pushing for priority roles
+                                        // not pushing for deputy_head but instead for priority, this works as it should right?
+                                    }
+
+                                }
+                                /* */
+
+                                push = false
+                                console.log("don't push");
+                                // fixes the wrong match in school 6
+                            }
+
+    
                         }
                         
                     }
                 }
                 //
+
+                // i need to extensively check other matches in context (to make sure we're not matching wrong)...
+                // this made sure a wrong headteacher email didnt slip through... (example is in index.js)
+                if (!["dsl", "safeguarding_officer", "deputy_head"].includes(roleKey) && /\bDSL\b/.test(context)) push = false;
 
 
                 // hmm we could also check for full stops..
@@ -213,6 +279,13 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
                     // }
 
                     // so, only allow 2 headteacher emails????
+
+                    // removing PA emails for now...
+                    if (context.match(/\bPA\b/)) {
+                        push = false;
+                    }
+
+                    // headteacher(followed by 's) should no longer be matched! it's the best decision for now, for accuracy
                 }
 
                 if (roleKey === "mental_health") {
@@ -220,7 +293,7 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
                 }
 
                 // add 'deputy' to make it distinct
-                if (!emailToPush.includes("- (Deputy)") && roleKey === "dsl" && context.match(/designated safeguarding lead|safeguarding lead/gi)?.length === 1 && deputyDSLMatch) {
+                if (!emailToPush.includes("- (Deputy)") && roleKey === "dsl" && context.match(regex)?.length === 1 && deputyDSLMatch && !altMatch) {
                     emailToPush = `${emailToPush} - (Deputy)`
                 }
 
@@ -236,6 +309,8 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
                 // make a clear list & notes with these edge cases ^^ (inside the function)
                 /// ^^^^^^^^^
 
+                if (emailToPush.includes(" - (Deputy)") && result[roleKey]?.length > 2) push = false; // or > 3?
+                if (result[roleKey]?.length >= 3) push = false; // in all cases, if theres more than 3, dont push?
 
                 // stop random domains passing through... TEST WITH & WITHOUT THIS
                 if (Object.keys(occurances).length > 1) {

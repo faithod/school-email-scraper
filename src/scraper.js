@@ -43,6 +43,7 @@ async function fetchDynamicHTML(url, page) {
 
 // scrape a single school
 async function scrapeSchool({ name, url }, page) { 
+    const { default: chalk } = await import('chalk'); // temp
 
     // make sure: result is being correctly filled in, & e.g. we arnt overriding emails found ect.
     let result = {
@@ -88,7 +89,7 @@ async function scrapeSchool({ name, url }, page) {
 
         // call extractEmails on each page
         for (const link of contactLinks) {
-            const isPDF = link.includes(".pdf") || link.includes("type=pdf"); // or match (symbol-pdf)??
+            const isPDF = [".pdf", "type=pdf", "%2epdf"].some(s => link.includes(s)); // or match (symbol-pdf)??
             let data;
             // let dynamicHTML;
             try {
@@ -106,7 +107,7 @@ async function scrapeSchool({ name, url }, page) {
                     // ONLY USE IF ITS EMPTY FOR A SCHOOL! >> ON A SECOND ITERATION?
                 }
             } catch (err) {
-                console.error(`COULDNT FETCH FROM LINK, url: ${link} - ERROR: ${err.message}`);
+                console.error(chalk.red(`COULDNT FETCH FROM LINK, url: ${link} - ERROR: ${err.message}`));
                 continue;
             }
 
@@ -114,7 +115,7 @@ async function scrapeSchool({ name, url }, page) {
         }
         console.log("final occurances", occurances);
     } catch (error) {
-        console.warn(`Ran into error whilst trying to scrape school: ${name}, error:`, error?.message, "status:", error?.status);
+        console.warn(chalk.red(`Ran into error whilst trying to scrape school: ${name}, error:`), error, "status:", error?.status);
     }
     
     console.log("final result:", result);
@@ -164,13 +165,14 @@ let blankResult = {
 
 // looked through except p-limit
 (async () => {
+    const { default: chalk } = await import('chalk'); // temp
+
     const [schools, existingRows] = await extractURLs();
     let emailsFound = 0;
 
-    const browser = await puppeteer.launch({ headless: true }); // need: { headless: true } (?) - apparently its slower & more detectable...
+    const browser = await puppeteer.launch({ headless: true });
+    // need: { headless: true } (?) - apparently its slower & more detectable...
     const page = await browser.newPage();
-
-
 
     // testing:
     // console.log("school name:", schools[18].name, "school url:", schools[18].url);
@@ -208,7 +210,7 @@ let blankResult = {
                 try {
                     result = await scrapeSchool(school, page);
                 } catch (error) {
-                    console.warn(`Failed to scrape school ${school.name}: ${error?.message}`);
+                    console.warn(chalk.red(`Failed to scrape school ${school.name}: ${error?.message}`));
                 }
 
                 for (const arr of Object.values(result)) {
@@ -270,3 +272,13 @@ let blankResult = {
 
 
 // extraaaa: navigate all links on a site & find all emails & dump export them...
+
+
+/* pdf issue, invalid emails:
+    - 7MsLauraHall3348l.hall@bremer.waltham.sch.uk
+    - 7AHennaDhedih.dhedhi@bremer.waltham.sch.uk
+    - Scottdsl@willowfield-school.co.uk
+
+   possible solutions:
+   - pdfjs-dist gives better control? (but looks messy)
+*/

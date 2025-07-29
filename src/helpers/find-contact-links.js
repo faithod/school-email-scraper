@@ -4,7 +4,7 @@ const keyWords = [
     'staff', 'team', 'contact', 'lead', 'about', 'dsl', 'safeguarding', 
     'key', 'pshe', 'pshc', 'pastor', 'wellbeing', 'protect', "staff", 
     "support", 'health', "faculties", "safety", "counsel", "find", "safe", 
-    "policies", "send", "policy", "complaint", "type=pdf" // policy (but sometimes matches too much...) // info // pdf was good but type=pdf to make it faster??
+    "policies", "send", "policy", "complaint", "type=pdf", "operation", "parent" // policy (but sometimes matches too much...) // info // pdf was good but type=pdf to make it faster??
 ]; 
 // check pdf keywords I might have missed
 
@@ -16,32 +16,38 @@ const visited = new Set();
 
 // find  staff/team/contact links for a url
 async function findContactLinks(baseUrl, homepageHtml, page, currentUrl = baseUrl, maxDepth = 6, currentDepth = 0) {
+    const { default: chalk } = await import('chalk'); // temp
+
     if (visited.has(currentUrl) || currentDepth > maxDepth) return [];
     visited.add(currentUrl);
 
     let html = homepageHtml;
+
+    if (currentUrl.includes(".pdf")) return []; // this correct..?
 
     if (currentDepth !== 0) {
         try {
             await page.goto(currentUrl, { waitUntil: 'networkidle2', timeout: 20000 }); // ["domcontentloaded", "networkidle2"] (more robust?)
             html = await page.content();
         } catch (err) {
-            console.error(`Failed to load nested page - ${currentUrl}: ${err.message}`);
+            console.error(chalk.red(`Failed to load nested page - ${currentUrl}: ${err.message}`));
             return [];
         }
     }
-
 
     const $ = cheerio.load(html || "");
     const anchors = $('a').toArray() || [];
     const foundLinks = new Set();
 
+    // console.log("anchorssss", anchors.map(a => ($(a).attr('href') || "")));
 
     // check all pdfs without checking keywords?
 
     // make sure share links dont pass through
     const begginingOfBaseUrl = baseUrl.match(/www\.[^\.]+/)?.[0]; // test this
     const altBaseUrl = baseUrl.replace(/^http(?!s)/, "https");
+
+    // console.log("anchorssss", anchors.filter(a => ($(a).attr('href') || "").includes("pdf")).map(a => ($(a).attr('href') || "")));
     
 
     for (const a of anchors) {
@@ -61,27 +67,46 @@ async function findContactLinks(baseUrl, homepageHtml, page, currentUrl = baseUr
         if (fullUrl.includes("http") && !fullUrl.includes("www.")) {
             fullUrl = fullUrl.replace("://", "://www.");
             // could it (like with the base) contain neither?
+
+            // ^^ dont think we need this for pdfs?? // bc pdfs can be: ..  'https://4905753ff3cea231a8...'
         }
 
         const matchesKeyword = keyWords.some(word => href.includes(word) || title.includes(word));
         const sameDomain = fullUrl.includes(begginingOfBaseUrl) && (fullUrl.startsWith(baseUrl) || fullUrl.startsWith(altBaseUrl)); // << is this whole thing needed? 
 
-        if (matchesKeyword && (sameDomain || isPDF) && !fullUrl.includes(".docx")) { // filter out docs for now...
-            foundLinks.add(isPDF ? fullUrlCaseSensitive : fullUrl); // s3 urls are case sentitive (pdf may live on s3)
+
+        // have i broken something w the urls? beacon high is acring weird... think its fine now?
+
+        // found a website with 2 obscure links that none of my matches can find
+        let mainPageHasLessThan3Links = false;
+
+        if (currentDepth === 0 && anchors.length < 4) {
+            mainPageHasLessThan3Links = true;
+        }
+
+        // filter out docs for now
+
+        // sameDomain will fail if it redirects...
+
+        if ((matchesKeyword && (sameDomain || isPDF) && !fullUrl.endsWith(".docx")) || mainPageHasLessThan3Links) {
+            const urlToUse = isPDF ? fullUrlCaseSensitive : fullUrl;
+            foundLinks.add(urlToUse); // s3 urls are case sentitive (pdf may live on s3)
 
             try {
                 // Fetch and parse nested page
-                const childLinks = await findContactLinks(baseUrl, null, page, fullUrl, maxDepth, currentDepth + 1);
+                const childLinks = await findContactLinks(baseUrl, null, page, urlToUse, maxDepth, currentDepth + 1);
+                // if its a pdf, should we call: findContactLinks ??....
                 for (const link of childLinks) {
                     foundLinks.add(link);
                 }
             } catch (err) {
-                console.error(`Failed to call findContactLinks for nested page - ${fullUrl}:`, err.message);
+                console.error(chalk.red(`Failed to call findContactLinks for nested page - ${urlToUse}:`), err.message);
                 continue;
             }
         }
     };
 
+    // console.log("visited", visited);
     return [...foundLinks];
 };
 
