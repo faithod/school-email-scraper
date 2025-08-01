@@ -4,6 +4,7 @@ const { deputyCPORegex } = require('../helpers/extract-correct-emails');
 // come back to the commented out bits
 
 // const deputyDSL = [
+// "Deputy  DSL’s "
 // ];
 
 // Deputy Designated Safeguarding Lead, Deputy Safeguarding Lead, Deputy DSL `Deputy\nDesignated\nSafeguarding\nLead` `Deputy \n Designated \n Safeguarding\nLead`

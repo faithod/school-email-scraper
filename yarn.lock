@@ -3235,7 +3235,7 @@ puppeteer-cluster@^0.24.0:
   dependencies:
     debug "^4.3.4"
 
-puppeteer-core@24.15.0:
+puppeteer-core@24.15.0, puppeteer-core@^24.15.0:
   version "24.15.0"
   resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-24.15.0.tgz#8512759d8726e64c15ab1f014e3c54cf302c4111"
   integrity sha512-2iy0iBeWbNyhgiCGd/wvGrDSo73emNFjSxYOcyAqYiagkYt5q4cPfVXaVDKBsukgc2fIIfLAalBZlaxldxdDYg==

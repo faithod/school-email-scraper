@@ -203,7 +203,8 @@ let blankResult = {
 
     const browser = await puppeteer.launch({
         headless: true,
-        protocolTimeout: 240000 
+        protocolTimeout: 240000,
+        args: ["--disable-gpu", "--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
      });
     
 
@@ -308,7 +309,7 @@ let blankResult = {
             })
         );
 
-        await Promise.all(promises); // do we want it in order... ehh
+        await Promise.allSettled(promises); // do we want it in order... ehh
     }
 
     await browser.close();

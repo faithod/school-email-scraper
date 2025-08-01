@@ -1,4 +1,3 @@
-const { describe, expect, test } = require('@jest/globals');
 const { emailRegex, emailDomainRegex } = require('../helpers/extract-correct-emails'); 
 
 // skip for now >
@@ -26,10 +25,18 @@ const emails = [
     'random-email@griefencounter.org.uk', 'random_email@griefencounter.org.uk', 'random.email3@griefencounter.org.uk'
 ];
 
+// before
+// const emailDomains = [
+//     '@beaconhigh', '@beaconhigh', '@beaconhigh', '@beaconhigh', '@beaconhigh',
+//     '@samaritans', '@griefencounter', 
+//     '@griefencounter', '@griefencounter', '@griefencounter'
+// ]
+
+
 const emailDomains = [
-    '@beaconhigh', '@beaconhigh', '@beaconhigh', '@beaconhigh', '@beaconhigh',
-    '@samaritans', '@griefencounter', 
-    '@griefencounter', '@griefencounter', '@griefencounter'
+    '@beaconhigh.org', '@beaconhigh.org', '@beaconhigh.org', '@beaconhigh.org', '@beaconhigh.org',
+    '@samaritans.org', '@griefencounter.org.uk', 
+    '@griefencounter.org.uk', '@griefencounter.org.uk', '@griefencounter.org.uk'
 ]
 
 describe('make sure to only match the email domain', () => {
