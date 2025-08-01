@@ -4,14 +4,14 @@ const keyWords = [
     'staff', 'team', 'contact', 'lead', 'about', 'dsl', 'safeguarding', 
     'key', 'pshe', 'pshc', 'pastor', 'wellbeing', 'protect', "staff", 
     "support", 'health', "faculties", "safety", "counsel", "find", "safe", 
-    "policies", "send", "policy", "complaint", "type=pdf", "operation", "parent" // policy (but sometimes matches too much...) // info // pdf was good but type=pdf to make it faster??
+    "policies", "send", "policy", "complaint", "type=pdf", "operation", "parent", "bullying",
+    "subject", "information", "statutory", "welfare", "pshe", "psce", "pshce", "well-being",
+     // policy (but sometimes matches too much...) // info // pdf was good but type=pdf to make it faster??
 ]; 
-// check pdf keywords I might have missed
 
 const visited = new Set();
 
 // go over this whole function again, not fully gone over
-
 // confused at what currentUrl is doing
 
 // find  staff/team/contact links for a url
@@ -27,7 +27,7 @@ async function findContactLinks(baseUrl, homepageHtml, page, currentUrl = baseUr
 
     if (currentDepth !== 0) {
         try {
-            await page.goto(currentUrl, { waitUntil: 'networkidle2', timeout: 20000 }); // ["domcontentloaded", "networkidle2"] (more robust?)
+            await page.goto(currentUrl, { waitUntil: 'networkidle2', timeout: 40000 }); // ["domcontentloaded", "networkidle2"] (more robust?)
             html = await page.content();
         } catch (err) {
             console.error(chalk.red(`Failed to load nested page - ${currentUrl}: ${err.message}`));
@@ -53,7 +53,11 @@ async function findContactLinks(baseUrl, homepageHtml, page, currentUrl = baseUr
     for (const a of anchors) {
         const href = ($(a).attr('href') || "").toLowerCase();
         const title = ($(a).attr('title') || "").toLowerCase();
+        // const textContent = ($(a).text() || "").toLowerCase();
+        const ariaLabel = ($(a).attr('aria-label') || "").toLowerCase(); // OR just look into allll pdfs??
+
         const isPDF = href.includes('.pdf');
+        // const isPDF = [".pdf", "type=pdf", "%2epdf"].some(s => link.includes(s)); // ???? use this here aswell???
 
         const hrefCaseSentitive = ($(a).attr('href') || "");
 
@@ -71,8 +75,12 @@ async function findContactLinks(baseUrl, homepageHtml, page, currentUrl = baseUr
             // ^^ dont think we need this for pdfs?? // bc pdfs can be: ..  'https://4905753ff3cea231a8...'
         }
 
-        const matchesKeyword = keyWords.some(word => href.includes(word) || title.includes(word));
+        const matchesKeyword = keyWords.some(word => href.includes(word) || title.includes(word) || ariaLabel.includes(word)); // textContent === "next"
         const sameDomain = fullUrl.includes(begginingOfBaseUrl) && (fullUrl.startsWith(baseUrl) || fullUrl.startsWith(altBaseUrl)); // << is this whole thing needed? 
+
+
+        // console.log("samedomain",sameDomain);
+        // console.log("matchesKeyword",matchesKeyword);
 
 
         // have i broken something w the urls? beacon high is acring weird... think its fine now?
@@ -80,7 +88,7 @@ async function findContactLinks(baseUrl, homepageHtml, page, currentUrl = baseUr
         // found a website with 2 obscure links that none of my matches can find
         let mainPageHasLessThan3Links = false;
 
-        if (currentDepth === 0 && anchors.length < 4) {
+        if (currentDepth === 0 && anchors.length < 6) {
             mainPageHasLessThan3Links = true;
         }
 
@@ -88,7 +96,9 @@ async function findContactLinks(baseUrl, homepageHtml, page, currentUrl = baseUr
 
         // sameDomain will fail if it redirects...
 
-        if ((matchesKeyword && (sameDomain || isPDF) && !fullUrl.endsWith(".docx")) || mainPageHasLessThan3Links) {
+        const doesntHaveUnsupported = !fullUrl.endsWith(".docx") && !fullUrl.endsWith(".pptx") && !fullUrl.endsWith(".doc")
+
+        if ((matchesKeyword && (sameDomain || isPDF) && doesntHaveUnsupported) || mainPageHasLessThan3Links) {
             const urlToUse = isPDF ? fullUrlCaseSensitive : fullUrl;
             foundLinks.add(urlToUse); // s3 urls are case sentitive (pdf may live on s3)
 

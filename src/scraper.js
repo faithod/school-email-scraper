@@ -32,7 +32,7 @@ puppeteer.use(StealthPlugin());
 
 // the raw html sometimes didnt have what I could see on the page
 async function fetchDynamicHTML(url, page) {
-  await page.goto(url, { waitUntil: 'networkidle2', timeout: 20000 }); // wait for all JS to finish // find out actual timeout needed, dont want it too long
+  await page.goto(url, { waitUntil: 'networkidle2', timeout: 40000 }); // wait for all JS to finish
 
   return await page.content();
 //   await page.close(); // Close the tab, not the browser
@@ -72,7 +72,7 @@ async function scrapeSchool({ name, url }, page) {
         const validURL = url.includes("http") ? fixedURL || url : !url.includes("www.") ? `http://www.${url}` : `http://${url}` /* if the url contains neither http(s) or www. */
         
         // find relevant links
-        const html = await fetchDynamicHTML(validURL, page);
+        const html = await fetchDynamicHTML(validURL, page); // can get TimeoutError >> retry if so?
         const contactLinks = await findContactLinks(validURL, html, page);  
         console.log("contactLinks", contactLinks); 
          
@@ -89,14 +89,43 @@ async function scrapeSchool({ name, url }, page) {
 
         // call extractEmails on each page
         for (const link of contactLinks) {
-            const isPDF = [".pdf", "type=pdf", "%2epdf"].some(s => link.includes(s)); // or match (symbol-pdf)??
+            const isPDF = [".pdf", "type=pdf", "%2epdf"].some(s => link?.toLowerCase().includes(s)); // or match (symbol-pdf)??
             let data;
             // let dynamicHTML;
             try {
                 if (isPDF) {
-                    const { data: pdfData } = await axios.get(link, { // dont need pupeteer for pdfs i guess..?
+                    const { data: pdfData, headers } = await axios.get(link, { // dont need pupeteer for pdfs i guess..?
                         responseType: 'arraybuffer', // get raw binary data
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
+                                          'AppleWebKit/537.36 (KHTML, like Gecko) ' +
+                                          'Chrome/114.0.0.0 Safari/537.36',
+                            Accept: 'application/pdf'
+                            // ^^ will this work for other schools?
+                            // added this bc I was getting: 'ERROR: Request failed with status code 403'
+                        }
                     });
+
+                    const contentType = headers['content-type'];
+
+                    if (!contentType.includes('pdf')) {
+                        console.warn(chalk.yellow(`Not a real PDF: ${headers['content-type']}, link: ${link}`));
+
+                        if (contentType.includes("html")) {
+                            console.error(chalk.red("Unhandled content type: html"));
+                            continue;
+
+                            // should I be skipping? should I still extract text?
+                        } else {
+                            console.error(chalk.red(`Unhandled content type: ${contentType}`));
+                            continue;
+                        }
+                        
+                        // ^^ bc I was getting: 'Warning: Ignoring invalid character "104" in hex string'
+                        // & the pdf didnt seem to be handled/seemed to be skipped
+                        // for summerhill.dudley school
+                        // getting: "ERROR: Invalid PDF structure"
+                    }
 
                     const dataBuffer = Buffer.from(pdfData);
                     const parsed = await pdf(dataBuffer);
@@ -107,7 +136,7 @@ async function scrapeSchool({ name, url }, page) {
                     // ONLY USE IF ITS EMPTY FOR A SCHOOL! >> ON A SECOND ITERATION?
                 }
             } catch (err) {
-                console.error(chalk.red(`COULDNT FETCH FROM LINK, url: ${link} - ERROR: ${err.message}`));
+                console.error(chalk.red(`COULDNT FETCH FROM FOUND LINK, url: ${link} - ERROR: ${err.message}`));
                 continue;
             }
 
@@ -115,14 +144,14 @@ async function scrapeSchool({ name, url }, page) {
         }
         console.log("final occurances", occurances);
     } catch (error) {
-        console.warn(chalk.red(`Ran into error whilst trying to scrape school: ${name}, error:`), error, "status:", error?.status);
+        console.warn(chalk.red(`Ran into error whilst trying to scrape school: ${name}, error:`), error, "status:", error?.status); 
     }
     
     console.log("final result:", result);
     return result;
 }
 
-const csvPath = 'scraped_schools.csv';
+const csvPath = 'final_scraped_schools.csv';
 
 const csvWriter = createCsvWriter({
     path: csvPath,
@@ -165,14 +194,18 @@ let blankResult = {
 
 // looked through except p-limit
 (async () => {
+    // console.log(require('os').cpus().length);
+    console.time();
     const { default: chalk } = await import('chalk'); // temp
 
     const [schools, existingRows] = await extractURLs();
     let emailsFound = 0;
 
-    const browser = await puppeteer.launch({ headless: true });
-    // need: { headless: true } (?) - apparently its slower & more detectable...
-    const page = await browser.newPage();
+    const browser = await puppeteer.launch({
+        headless: true,
+        protocolTimeout: 240000 
+     });
+    
 
     // testing:
     // console.log("school name:", schools[18].name, "school url:", schools[18].url);
@@ -181,7 +214,7 @@ let blankResult = {
     /* p-limit logic */
     const pLimit = await import('p-limit').then(mod => mod.default);
     const CHUNK_SIZE = 300;
-    const limit = pLimit(5);
+    const limit = pLimit(6);
 
     // Helper to chunk array
     const chunkArray = (array, size) =>
@@ -194,6 +227,11 @@ let blankResult = {
 
     // const chunks = [schools.slice(0,2)]
 
+    // const chunks = [[{
+    //     name: "Acland Burghley School",
+    //     url: 'http://www.aclandburghley.camden.sch.uk/'
+    // }]];
+
     // understanding...
     // Math.ceil(array.length / size) --> most likely around 10 => chunks length is then 10
     // slices example -> (0, 300) (300, 600) (600, 900)
@@ -205,12 +243,20 @@ let blankResult = {
 
         const promises = chunk.map(school =>
             limit(async () => {
+                const page = await browser.newPage();
+
                 let result = blankResult;
 
                 try {
                     result = await scrapeSchool(school, page);
                 } catch (error) {
                     console.warn(chalk.red(`Failed to scrape school ${school.name}: ${error?.message}`));
+                } finally {
+                    try {
+                        await page.close();
+                    } catch (err) {
+                        console.warn(chalk.bgGreen("Failed to close page cleanly:"), err.message);
+                    }
                 }
 
                 for (const arr of Object.values(result)) {
@@ -267,6 +313,7 @@ let blankResult = {
 
     await browser.close();
     console.log(`CSV writing complete! -- ${emailsFound} emails found`);
+    console.timeEnd(); // can be up to 4 mins long rn...(whats the longest?)
 })();
 
 
@@ -278,7 +325,12 @@ let blankResult = {
     - 7MsLauraHall3348l.hall@bremer.waltham.sch.uk
     - 7AHennaDhedih.dhedhi@bremer.waltham.sch.uk
     - Scottdsl@willowfield-school.co.uk
+    - phyare@bordgrng.bham.sch.uksubject (not from pdf tho but from bad html)
 
    possible solutions:
    - pdfjs-dist gives better control? (but looks messy)
 */
+
+// fixed urls ->
+// http://www.harlingtonschool.co.uk/ => http://www.harlingtonschool.org 
+// http://loretochorlton.org/ => https://www.loretochorlton.co.uk/

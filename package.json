@@ -19,6 +19,8 @@
     "validator": "^13.15.15"
   },
   "devDependencies": {
+    "eslint": "^9.32.0",
+    "eslint-plugin-unicorn": "^60.0.0",
     "jest": "^30.0.4"
   }
 }
