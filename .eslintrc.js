@@ -16,6 +16,6 @@ module.exports = {
   plugins: ["jest", "unicorn"],
   root: true,
   rules: {
-    "no-undef": "error"
+    "no-undefined": "error"
   },
 };

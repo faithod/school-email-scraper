@@ -32,7 +32,7 @@ puppeteer.use(StealthPlugin());
 
 // the raw html sometimes didnt have what I could see on the page
 async function fetchDynamicHTML(url, page) {
-  await page.goto(url, { waitUntil: 'networkidle2', timeout: 40000 }); // wait for all JS to finish
+  await page.goto(url, { waitUntil: 'networkidle2', timeout: 120000 }); // wait for all JS to finish
 
   return await page.content();
 //   await page.close(); // Close the tab, not the browser
@@ -72,7 +72,13 @@ async function scrapeSchool({ name, url }, page) {
         const validURL = url.includes("http") ? fixedURL || url : !url.includes("www.") ? `http://www.${url}` : `http://${url}` /* if the url contains neither http(s) or www. */
         
         // find relevant links
-        const html = await fetchDynamicHTML(validURL, page); // can get TimeoutError >> retry if so?
+        let html;
+        if (page) {
+            html = await fetchDynamicHTML(validURL, page);
+        } else {
+            const { data } = await axios.get(validURL, { timeout: 60000 }); 
+            html = data;
+        }  // can get TimeoutError >> retry if so?
         const contactLinks = await findContactLinks(validURL, html, page);  
         console.log("contactLinks", contactLinks); 
          
@@ -132,7 +138,12 @@ async function scrapeSchool({ name, url }, page) {
 
                     data = parsed.text // error: "Warning: TT: undefined function: 32" means that parsed.text might be missing text
                 } else {
-                    data = await fetchDynamicHTML(link, page);
+                    if (page) {
+                        data = await fetchDynamicHTML(link, page);
+                    } else {
+                        const pageData = await axios.get(link, { timeout: 20000 });
+                        data = pageData.data;
+                    }
                     // ONLY USE IF ITS EMPTY FOR A SCHOOL! >> ON A SECOND ITERATION?
                 }
             } catch (err) {
@@ -203,8 +214,9 @@ let blankResult = {
 
     const browser = await puppeteer.launch({
         headless: true,
-        protocolTimeout: 240000,
-        args: ["--disable-gpu", "--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+        protocolTimeout: 60000 * 4,
+        args: ["--disable-gpu", "--no-sandbox", "--disable-setuid-sandbox"],
+        dumpio: true
      });
     
 
@@ -215,7 +227,7 @@ let blankResult = {
     /* p-limit logic */
     const pLimit = await import('p-limit').then(mod => mod.default);
     const CHUNK_SIZE = 300;
-    const limit = pLimit(6);
+    const limit = pLimit(4); // next time: try again on 3
 
     // Helper to chunk array
     const chunkArray = (array, size) =>
@@ -229,8 +241,8 @@ let blankResult = {
     // const chunks = [schools.slice(0,2)]
 
     // const chunks = [[{
-    //     name: "Acland Burghley School",
-    //     url: 'http://www.aclandburghley.camden.sch.uk/'
+    //     name: "Plumstead Manor School",
+    //     url: 'http://www.plumsteadmanor.com'
     // }]];
 
     // understanding...
@@ -247,18 +259,35 @@ let blankResult = {
                 const page = await browser.newPage();
 
                 let result = blankResult;
+                let currentSchoolEmails = 0;
 
                 try {
-                    result = await scrapeSchool(school, page);
+                    result = await scrapeSchool(school);
                 } catch (error) {
                     console.warn(chalk.red(`Failed to scrape school ${school.name}: ${error?.message}`));
-                } finally {
-                    try {
-                        await page.close();
-                    } catch (err) {
-                        console.warn(chalk.bgGreen("Failed to close page cleanly:"), err.message);
-                    }
+                } 
+
+                for (const arr of Object.values(result)) {
+                    currentSchoolEmails += arr.length;
                 }
+
+                if (currentSchoolEmails === 0) {
+                    // try again with pupetteer
+                    try {
+                        console.warn(chalk.bgCyan(`ZERO emails found for school: ${school.name}, trying again with puppeteer...`));
+                        // await new Promise(resolve => setTimeout(resolve, 2000)); // wait before retry
+                        result = await scrapeSchool(school, page);
+                    } catch (error) {
+                        console.error(chalk.green(`Failed to scrape school with puppeteer ${school.name}: ${error?.message}`));
+                    } 
+                    // finally {
+                    //     try {
+                    //         await page.close();
+                    //     } catch (err) {
+                    //         console.warn(chalk.bgGreen("Failed to close page cleanly:"), err.message);
+                    //     }
+                    // }
+                } // then count emails again
 
                 for (const arr of Object.values(result)) {
                     emailsFound += arr.length;

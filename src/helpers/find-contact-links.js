@@ -1,4 +1,5 @@
 const cheerio = require('cheerio');
+const axios = require('axios');
 
 const keyWords = [
     'staff', 'team', 'contact', 'lead', 'about', 'dsl', 'safeguarding', 
@@ -9,13 +10,13 @@ const keyWords = [
      // policy (but sometimes matches too much...) // info // pdf was good but type=pdf to make it faster??
 ]; 
 
-const visited = new Set();
+// const visited = new Set();
 
 // go over this whole function again, not fully gone over
 // confused at what currentUrl is doing
 
 // find  staff/team/contact links for a url
-async function findContactLinks(baseUrl, homepageHtml, page, currentUrl = baseUrl, maxDepth = 6, currentDepth = 0) {
+async function findContactLinks(baseUrl, homepageHtml, page, currentUrl = baseUrl, maxDepth = 6, currentDepth = 0, visited = new Set ()) {
     const { default: chalk } = await import('chalk'); // temp
 
     if (visited.has(currentUrl) || currentDepth > maxDepth) return [];
@@ -27,8 +28,13 @@ async function findContactLinks(baseUrl, homepageHtml, page, currentUrl = baseUr
 
     if (currentDepth !== 0) {
         try {
-            await page.goto(currentUrl, { waitUntil: 'networkidle2', timeout: 40000 }); // ["domcontentloaded", "networkidle2"] (more robust?)
-            html = await page.content();
+            if (page) {
+                await page.goto(currentUrl, { waitUntil: 'networkidle2', timeout: 120000 }); // ["domcontentloaded", "networkidle2"] (more robust?)
+                html = await page.content();
+            } else {
+                const { data } = await axios.get(currentUrl, { timeout: 60000 });
+                html = data;
+            }
         } catch (err) {
             console.error(chalk.red(`Failed to load nested page - ${currentUrl}: ${err.message}`));
             return [];
@@ -104,7 +110,7 @@ async function findContactLinks(baseUrl, homepageHtml, page, currentUrl = baseUr
 
             try {
                 // Fetch and parse nested page
-                const childLinks = await findContactLinks(baseUrl, null, page, urlToUse, maxDepth, currentDepth + 1);
+                const childLinks = await findContactLinks(baseUrl, null, page, urlToUse, maxDepth, currentDepth + 1, visited);
                 // if its a pdf, should we call: findContactLinks ??....
                 for (const link of childLinks) {
                     foundLinks.add(link);
