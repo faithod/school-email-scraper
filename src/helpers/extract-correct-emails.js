@@ -3,7 +3,7 @@ const { roleRegexMap } = require("../../data/index");
 const validator = require('validator');
 
 const isTheRelevantDeputyHead = (context) => {
-    const roleMatches = ["pastor", "safeguarding", "child protection"]; // randomly added 'child protection'????
+    const roleMatches = ["pastor", "safeguarding", "child protection"]; // randomly added 'child protection'....
     return roleMatches.some(role => context.toLowerCase().includes(role)) || context.includes("DSL");
 }
 
@@ -40,13 +40,13 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
     if (!html) return result;
 
     // this is so we can find internal links in a page with the format: <a href="javascript:mt('kaltmann','williamellis.camden.sch.uk','','')">Karl Altmann</a> // not tested 
-    let modifiedHtml = html.replace(/<a\s+href=["']javascript:mt\(\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'[^']*'\s*,\s*'[^']*'\s*\)["']\s*>(.*?)<\/a>/gi, (_, user, domain, name) => {
+    let modifiedHtml = html?.replace(/<a\s+href=["']javascript:mt\(\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'[^']*'\s*,\s*'[^']*'\s*\)["']\s*>(.*?)<\/a>/gi, (_, user, domain, name) => {
             const email = `${user}@${domain}`;
             return `${name} <a href="mailto:${email}">${email}</a>`;
         })
 
     // for: <a href="mailto:lsproat@thomastallis.org.uk"> (mailto)
-    modifiedHtml = modifiedHtml.replace(/<a\s+href=["']mailto:([^"']+)["'][^>]*>(.*?)<\/a>/gi, (_, emailHref, linkText) => {
+    modifiedHtml = modifiedHtml?.replace(/<a\s+href=["']mailto:([^"']+)["'][^>]*>(.*?)<\/a>/gi, (_, emailHref, linkText) => {
         return `email:${emailHref}`;
     });
 
@@ -76,8 +76,9 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
     const $ = cheerio.load(modifiedHtml);
     const allText = isPDF ? html : $('body').text();
 
+    const notAllowed = [".wixpress.", "recruitment", "attendance", ".gov.uk", "@sentry", "squarespace", "google.com", "@2x.gif", "@zoho.com", "@fnflbexf.bet", "@shaw-education", "@lionhearttrust.org", ".jpg", "@1.5x", "absence", "studentservices"]; // some of these are organisations that work with schools // utilise chatgpt to come up with more..?
     const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,}/g;
-    const emailMatches = [...allText.matchAll(emailRegex)].filter(email => !email[0]?.includes(".wixpress.") && !email.includes("recruitment@")); // remov wix emails // like: 2062d0a4929b45348643784b5cb39c36@sentry.wixpress.com
+    const emailMatches = [...allText.matchAll(emailRegex)].filter(email => notAllowed.every(x => !email[0]?.toLowerCase().includes(x))); // also @judicium.co.uk...? 
 
     if (!emailMatches?.length) return result;
 
@@ -89,7 +90,7 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
         if (emailIndex === undefined) continue;
 
         // log email occurances
-        const emailDomain = email.match(emailDomainRegex)?.[0];
+        const emailDomain = email.match(emailDomainRegex)?.[0]?.toLowerCase();
         occurances[emailDomain] = occurances[emailDomain] === undefined ? 0 : occurances[emailDomain] + 1;
 
         const whereToStart = allText.slice(0, emailIndex).length <= 116 ? 0 : emailIndex - 116 // change num <<<*
@@ -100,8 +101,16 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
 
         // find matches within the context
         for (const [roleKey, regex] of Object.entries(roleRegexMap)) {
-            const altMatch = (roleKey === "dsl" && (email.toLowerCase().includes("safeguarding") || email.toLowerCase().startsWith("dsl@"))) || (roleKey === "pshe" && email.toLowerCase().includes(roleKey)) || (roleKey === "headteacher" && email.toLowerCase().match(/office@|admin|head@|headmaster@/i) && !email.includes(".gov.uk") && result[roleKey]?.length === 0) || (roleKey === "safeguarding_officer" && email.toLowerCase().match(/childprotection@/i)) || (roleKey === "pastoral" && email.toLowerCase().match(/\bpastoral@/i))// is that accurate for headteachers...?  // |\benquiry@|\benquiries@/
+            const altMatch = (roleKey === "dsl" && (email.toLowerCase().includes("safeguarding") || email.toLowerCase().startsWith("dsl@"))) || (roleKey === "pshe" && email.toLowerCase().includes(roleKey)) || (roleKey === "headteacher" && email.toLowerCase().match(/\boffice@|\badmin@|\bhead@|headmaster@/i) && !email.includes(".gov.uk") && result[roleKey]?.length === 0) || (roleKey === "safeguarding_officer" && email.toLowerCase().match(/childprotection@/i)) || (roleKey === "pastoral" && email.toLowerCase().match(/\bpastoral@/i))// is that accurate for headteachers...?  // |\benquiry@|\benquiries@/
             // remove dsl email if it includes the word 'govenor'?
+
+            // improvemnt, keep log of emails, then only add 'admin' if theres no headteacher...
+
+            if (result[roleKey].some(e => e?.toLowerCase() === email?.toLowerCase())) {
+                console.log("email already pushed inn: ", email);
+                console.log("result[roleKey]:", result[roleKey]);
+                continue;
+            } 
 
             if (regex.test(context) || altMatch) {
                 console.log("A match!");
@@ -130,23 +139,28 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
 
 
                 const emailsWithinTheContext = [...context.matchAll(emailRegex)]
+                // console.log("emailsWithinTheContext", emailsWithinTheContext.map(e => e[0]));
+
                 if (emailsWithinTheContext.length) {
-                    // console.log("actual email index", emailIndex);
+                    console.log("emails within the context");
 
-
-                    // console.log("emailsWithinTheContext", emailsWithinTheContext.map(e => e[0]));
 
                     for (const match of emailsWithinTheContext) {
                         const matchedEmail = match[0];
                         // const index = match.index;
-                        const matchedEmailIndex = emailMatches.find(m => m[0] === matchedEmail)?.index
 
-                        if (matchedEmail !== email && matchedEmailIndex < emailIndex) {
-                            const start = matchedEmailIndex + matchedEmail.length;
-                            const relevantContext = allText.slice(start, emailIndex);
+                        console.log("match.index", match.index);
+                        console.log("context.length", context.length);
+
+                        // hmm, can scew up if allText has multiple references to matchedEmail.... (for example at the start of alltext) >>
+                        // this is probs more accurate
+                        // hope this is safe...
+                        if (matchedEmail !== email && match.index < context.length) {
+                            const start = match.index + matchedEmail.length;
+                            const relevantContext = context.slice(start);
 
                             // console.log("emails within the context! >", emailsWithinTheContext.map(m => `${m[0]} - index: ${matchedEmailIndex}`));
-                            // console.log("relevantContext", relevantContext);
+                            console.log("relevantContext", relevantContext);
 
 
                             /* ahh so is this turning: [random-texttt email@domain.com text-we're-looking-for email@domain.com]
@@ -157,7 +171,10 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
                                 push = false;
                                 console.log("dont-push-a");
                             }
-                            if (altMatch) push = true;
+                            if (altMatch) {
+                                console.log("sikee");
+                                push = true;
+                            }
 
                             // remember deputy head must include 'pastoral' etc.
                             if (roleKey === "deputy_head" && regex.test(relevantContext)) {
@@ -181,14 +198,17 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
                             Deputy DSL 
                             Head Teacher 
                             email:`
-                    *
+                    */
                 //
 
 
                 /* edge case: wrong match purely due to the match being too close to a random email: */
-                const newContextRegex = /(?<=\bfor\b)(.*?)(?=\bcontact\b)|\bSENCo\b|\bdirector\s+of\b|\bchair\s+of\b|\bgovernor\b|\bAttendance\s+Officer\b|\balternatively\b|(?<!Ms|Mrs|Mr)\.\s+/i; // KEEP ADDING TO THIS // matches: `for .... contact` - also other roles (that ill keep adding)
-                const newContextRegex2 = /\bSEND|\u2022|\x2A/;
-                const newContextRegex3 = /\s+or\s+/; // ' or ' could be directly after...
+                const newContextRegex = /(?<=\bfor\b)(.*?)(?=\bcontact\b)|\bSENCo\b|\bdirector\s+of\b|\bchair\s+of\b|\bgovernor\b|\bAttendance\s+Officer\b|\balternatively\b|(?<!Ms|Mrs|Mr)\.\s+|\battendance\b|\battend\s+|\bHR\s+Director\b|\bfinance\b|\baccounting\b|chair\s+of\b|\bpolice\b|\babsence\b|\breception\b|\bIT\s+services\b/i; // KEEP ADDING TO THIS // matches: `for .... contact` - also other roles (that ill keep adding)
+                const newContextRegex2 = /\bSEND|\u2022|\x2A|\bSEN\s+/;
+                const newContextRegex3 = /(?<!\-|')\bor\s+(?!email)/; // ' or ' could be directly after... // match .or but not -or 'or ... // doesnt match 'or email'
+
+                // could beeee: Designated Safeguarding Lead/Director of Welfare => (https://www.asap.org.uk/page/?title=Staff+at+All+Saints+%2D+Autumn+Term+2025&pid=95) <<<
+                // this is being matched:() n please contact Mr L Hubbard from the Safeguarding Team to discuss any queries.Or email the school office at email:)
 
                 // dont skip when its >> ':' plus the match after???<<<<
 
@@ -208,10 +228,13 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
                 // basically if another role is in front, dont push
                 if ((newContextMatch || newContextMatch2 || newContextMatch3) && actualRoleMatch) {
                     console.log(chalk.yellow("actualRoleMatch index:"), actualRoleMatch?.index);
-                    console.log(chalk.yellow("newContextMatch:"), newContextMatch || newContextMatch2 || newContextMatch3);
+                    console.log(chalk.yellow("newContextMatch:"), newContextMatch);
+                    console.log(chalk.yellow("newContextMatch2:"), newContextMatch2);
+                    console.log(chalk.yellow("newContextMatch3:"), newContextMatch3);
 
                     const newContextIndexes = [newContextMatch?.index || -1, newContextMatch2?.index || -1, newContextMatch3?.index || -1]
                     const newContextIdx = Math.max(...newContextIndexes);
+                    console.log(chalk.yellow("newContextIdx:"), newContextIdx);
                     const newContextIsCloserToEmail = newContextIdx > actualRoleMatch.index;
                     const charsInbetween = newContextIdx - actualRoleMatch.index;
 
@@ -275,6 +298,7 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
 
                                 const priority = ["dsl", "pastoral"];
 
+                                // this needs extending
                                 if (numOfCharsBetweenMatches <= 4 & ["-", "&"].some(char => contextBetweenMatches.includes(char))) { // also ' and ' // also '/'
                                     /* 
                                         gonna be more specific so we don't break anything:
@@ -346,7 +370,7 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
                         }
                     }
                     
-                    if (emailArray.includes(emailToPush)) {
+                    if (emailArray.some(email => email.toLowerCase() === emailToPush.toLowerCase())) {
                         push = false;
                         console.log("dont-push-d");
                     }
@@ -387,8 +411,15 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
                     // headteacher(followed by 's) should no longer be matched! it's the best decision for now, for accuracy
                 }
 
-                if (roleKey === "dsl" && emailToPush.includes("enquir")) { 
-                    push = false;
+                if (roleKey === "dsl" ) { 
+                    if (emailToPush.includes("enquir")) push = false;
+
+                    // sometimes: safeguarding@consilium-at.com, Safeguarding.Evolve@consilium-at.com, Safeguarding.Heworth@consilium-at.com (https://www.washingtonacademy.co.uk/attachments/download.asp?file=801&type=pdf)
+                    if (emailToPush?.toLowerCase()?.includes("safeguarding") && result[roleKey].some(email => email?.toLowerCase()?.includes("safeguarding"))) {
+                        push = false;
+                        console.log("dont push - too many safeguarding!");
+                        // TEST
+                    }
                 }
 
                 if (roleKey === "mental_health") {
@@ -414,9 +445,13 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
                 // make a clear list & notes with these edge cases ^^ (inside the function)
                 /// ^^^^^^^^^
 
-                if (emailToPush.includes(" - (Deputy)") && result[roleKey]?.length > 2) push = false; // or > 3?
+                if (emailToPush.includes(" - (Deputy)") && result[roleKey]?.length >= 2) push = false; // or > 3?
+                if (emailToPush.includes(" - (Deputy)") && !result[roleKey].some(email => email?.toLowerCase()?.includes("(Deputy)"))) push = false; // only allow 1 deputy from now on
                 if (result[roleKey]?.length >= 3) push = false; // in all cases, if theres more than 3, dont push?
-                if (roleKey === "headteacher" && result[roleKey]?.length >= 2) push = false; // headteacher can be matched a lot...
+                if (roleKey === "headteacher" && result[roleKey]?.length >= 2) {
+                    console.log("dont push in ANOTHER headteacher...")
+                    push = false; // headteacher can be matched a lot...
+                }
 
 
                 // if theres absolutely nothing & email is enquiry@ -> push in..
@@ -426,8 +461,8 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
                     const emailOccurances = occurances[emailDomain];
 
                     for (const domainKey in occurances) {
-                        const num = occurances[domainKey];
-                        if (num > emailOccurances) {
+                        const num = occurances[domainKey]; // (num > emailOccurances) && !domainKey.slice(1).includes(emailDomain.slice(1)) && !emailDomain.slice(1).includes(domainKey.slice(1)) && (vice versa)
+                        if ((num > emailOccurances) && !emailToPush.includes("@dret.co.uk")) { // change this<< // l@dret.co.uk ?? idek... but bobbymooreacademy uses them... // && !emailToPush.includes("@bobbymooreacademy.co.uk")
                             push = false;
                             console.log("dont-push-f");
                         }
@@ -450,9 +485,9 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
                 // }
                 // parking for now bc tired
 
-                if (!result[roleKey].includes(emailToPush) && push && !invalid.includes(emailToPush) && !emailToPush.includes("SENC") && !emailToPush.includes("SEND")) {
-                    // push in
-                    result[roleKey].push(emailToPush);
+                if (!result[roleKey].includes(emailToPush) && push && !invalid.includes(emailToPush) && !emailToPush.includes("SENC") && !emailToPush.includes("SEND") && !emailToPush.toLowerCase().includes("attendance")) {
+                    console.log("push-in!");
+                    result[roleKey].push(emailToPush.replace("%20", "")); // also saw: %C2%A0
                 }             
             }
         }
@@ -462,5 +497,3 @@ async function extractCorrectEmails(link, html, result, isPDF, occurances) {
 }
 
 module.exports = { extractCorrectEmails, isTheRelevantDeputyHead, emailDomainRegex, deputyCPORegex };
-
-// add wholeee of the end of emailll...

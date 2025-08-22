@@ -21,8 +21,14 @@
     "validator": "^13.15.15"
   },
   "devDependencies": {
+    "@playwright/test": "^1.54.2",
+    "@types/node": "^24.1.0",
     "eslint": "^9.32.0",
     "eslint-plugin-unicorn": "^60.0.0",
-    "jest": "^30.0.4"
+    "jest": "^30.0.4",
+    "pm2": "^6.0.8"
+  },
+  "scripts": {
+    "start": "node --max-old-space-size=8192 src/scraper.js"
   }
 }
