@@ -12,7 +12,7 @@ async function extractSchools(checkFor = 0) {
     return new Promise((resolve, reject) => {
         const schools = [];
 
-        fs.createReadStream("final_with_filled_in.csv") // scraped_schools.csv // final.csv
+        fs.createReadStream("final.csv") // scraped_schools.csv // final_with_filled_in.csv
             .pipe(csv())
             .on('data', (row) => {
                 let pushSchool = !!row.Website; // skipping over schools which have no url
